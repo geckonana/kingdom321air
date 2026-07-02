@@ -3,6 +3,13 @@ const TASKS = [{"upload":"2026-07-02","play":"2026-07-03","type":"321主題曲",
 const PLATFORMS = ["YT", "微信", "陸董", "whatsapp", "新埔line", "晨讀321", "飛牛"];
 const REMINDER_TIME_LABEL = "每晚 8 點";
 const REMINDER_BODY = `今晚 8 點請上傳：${PLATFORMS.join("、")}`;
+const IMPORT_SHEETS = [
+  { match: "321講述影片", type: "321講述影片" },
+  { match: "321主題曲", type: "321主題曲" },
+  { match: "真理點心", type: "真理點心" },
+  { match: "舊約導讀", type: "舊約導讀" },
+  { match: "新約靈修會主", type: "新約靈修會主" }
+];
 
 const state = {
   filter: "today",
@@ -10,21 +17,75 @@ const state = {
   completed: JSON.parse(localStorage.getItem("yt-completed") || "{}"),
   links: JSON.parse(localStorage.getItem("yt-links") || "{}"),
   customTasks: JSON.parse(localStorage.getItem("yt-custom-tasks") || "[]"),
-  editingId: null
+  importedTasks: JSON.parse(localStorage.getItem("yt-imported-tasks") || "null"),
+  taskEdits: JSON.parse(localStorage.getItem("yt-task-edits") || "{}"),
+  editingId: null,
+  editingMode: "create"
 };
 
 const $ = selector => document.querySelector(selector);
+const collator = new Intl.Collator("zh-Hant");
+
 const today = () => {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 };
-const collator = new Intl.Collator("zh-Hant");
-const taskId = task => `${task.upload}|${task.type}|${task.episode}`;
-const displayDate = value => new Intl.DateTimeFormat("zh-TW", {month: "long", day: "numeric", weekday: "short"}).format(new Date(`${value}T12:00:00`));
+
+const displayDate = value => new Intl.DateTimeFormat("zh-TW", { month: "long", day: "numeric", weekday: "short" }).format(new Date(`${value}T12:00:00`));
 const episodeLabel = task => typeof task.episode === "number" ? `第 ${task.episode} 期` : task.episode;
-const allTasks = () => [...TASKS, ...state.customTasks].sort((a, b) => a.upload.localeCompare(b.upload) || a.type.localeCompare(b.type));
-const matchesOwner = task => state.owner === "all" || (task.owner || "") === state.owner;
-const ownerTasks = () => allTasks().filter(matchesOwner);
+
+function scheduleSource() {
+  return state.importedTasks || TASKS;
+}
+
+function baseTaskKey(task) {
+  return `base:${task.upload}|${task.play || ""}|${task.type}|${String(task.episode || "")}|${task.owner || ""}`;
+}
+
+function taskKey(task) {
+  return task.id || baseTaskKey(task);
+}
+
+function mergeTask(task) {
+  if (task.id) return { ...task, key: task.id };
+  const key = baseTaskKey(task);
+  return { ...task, ...(state.taskEdits[key] || {}), key };
+}
+
+function allTasks() {
+  const baseTasks = scheduleSource().map(mergeTask);
+  const customTasks = state.customTasks.map(task => ({ ...task, key: task.id }));
+  return [...baseTasks, ...customTasks].sort((a, b) => a.upload.localeCompare(b.upload) || a.type.localeCompare(b.type));
+}
+
+function matchesOwner(task) {
+  return state.owner === "all" || (task.owner || "") === state.owner;
+}
+
+function ownerTasks() {
+  return allTasks().filter(matchesOwner);
+}
+
+function filteredTasks() {
+  const current = today();
+  const tasks = ownerTasks();
+  if (state.filter === "today") return tasks.filter(task => task.upload === current);
+  if (state.filter === "upcoming") return tasks.filter(task => task.upload > current);
+  return tasks;
+}
+
+function saveLocalState() {
+  localStorage.setItem("yt-custom-tasks", JSON.stringify(state.customTasks));
+  localStorage.setItem("yt-task-edits", JSON.stringify(state.taskEdits));
+  localStorage.setItem("yt-completed", JSON.stringify(state.completed));
+  localStorage.setItem("yt-links", JSON.stringify(state.links));
+  localStorage.setItem("yt-owner-filter", state.owner);
+  if (state.importedTasks) {
+    localStorage.setItem("yt-imported-tasks", JSON.stringify(state.importedTasks));
+  } else {
+    localStorage.removeItem("yt-imported-tasks");
+  }
+}
 
 function renderOwnerFilter() {
   const owners = [...new Set(allTasks().map(task => task.owner).filter(Boolean))].sort(collator.compare);
@@ -39,24 +100,33 @@ function renderOwnerFilter() {
   });
   if (state.owner !== "all" && !owners.includes(state.owner)) {
     state.owner = "all";
-    localStorage.setItem("yt-owner-filter", state.owner);
+    saveLocalState();
     select.value = "all";
   }
 }
 
-function filteredTasks() {
-  const current = today();
-  const tasks = ownerTasks();
-  if (state.filter === "today") return tasks.filter(task => task.upload === current);
-  if (state.filter === "upcoming") return tasks.filter(task => task.upload > current);
-  return tasks;
+function setTaskDialog(mode, task = null) {
+  state.editingMode = mode;
+  state.editingId = task ? task.key : null;
+  $("#taskDialogTitle").textContent = mode === "edit" ? "修改任務" : "新增自訂任務";
+  $("#taskSubmitButton").textContent = mode === "edit" ? "儲存修改" : "新增任務";
+  $("#customUploadDate").value = task?.upload || today();
+  $("#customPlayDate").value = task?.play || "";
+  $("#customType").value = task?.type || "";
+  $("#customEpisode").value = task?.episode || "";
+  $("#customOwner").value = task?.owner || "";
+}
+
+function openTaskDialog(mode, task = null) {
+  setTaskDialog(mode, task);
+  $("#taskDialog").showModal();
 }
 
 function render() {
   renderOwnerFilter();
   const current = today();
   const todaysTasks = ownerTasks().filter(task => task.upload === current);
-  const done = todaysTasks.filter(task => state.completed[taskId(task)]).length;
+  const done = todaysTasks.filter(task => state.completed[task.key]).length;
   const ownerLabel = state.owner === "all" ? "全部同工" : state.owner;
   const heroSubject = state.owner === "all" ? "" : `${ownerLabel}`;
   $("#todayLabel").textContent = displayDate(current);
@@ -81,45 +151,49 @@ function render() {
     group.className = "date-group";
     if (state.filter !== "today") group.innerHTML = `<h3>${displayDate(date)}晚間上傳</h3>`;
     tasks.forEach(task => {
-      const id = taskId(task);
       const card = document.createElement("article");
-      card.className = `task ${state.completed[id] ? "done" : ""}`;
+      card.className = `task ${state.completed[task.key] ? "done" : ""}`;
       card.innerHTML = `
-        <input class="check" type="checkbox" aria-label="標示完成" ${state.completed[id] ? "checked" : ""}>
+        <input class="check" type="checkbox" aria-label="標示完成" ${state.completed[task.key] ? "checked" : ""}>
         <div>
-          <h3 class="task-title">${task.type}${task.episode ? `｜${episodeLabel(task)}` : ""}${task.custom ? '<span class="custom-badge">自訂</span>' : ""}</h3>
+          <h3 class="task-title">${task.type}${task.episode ? `｜${episodeLabel(task)}` : ""}${task.id ? '<span class="custom-badge">自訂</span>' : ""}</h3>
           <p class="meta">${task.owner ? `負責：${task.owner}　·　` : ""}${task.play ? `${displayDate(task.play)}播放` : `${displayDate(task.upload)}上傳`}　·　${PLATFORMS.join("、")}</p>
         </div>
         <div class="task-actions">
-          <button class="link-button ${state.links[id] ? "saved" : ""}">${state.links[id] ? "開啟影片" : "貼連結"}</button>
-          ${task.custom ? '<button class="delete-button">刪除</button>' : ""}
+          <button class="link-button ${state.links[task.key] ? "saved" : ""}">${state.links[task.key] ? "開啟影片" : "貼連結"}</button>
+          <button class="edit-button">修改</button>
+          ${task.id ? '<button class="delete-button">刪除</button>' : ""}
         </div>`;
+
       card.querySelector(".check").addEventListener("change", event => {
-        state.completed[id] = event.target.checked;
-        localStorage.setItem("yt-completed", JSON.stringify(state.completed));
+        state.completed[task.key] = event.target.checked;
+        saveLocalState();
         render();
       });
+
       card.querySelector(".link-button").addEventListener("click", () => {
-        if (state.links[id]) {
-          window.open(state.links[id], "_blank", "noopener");
+        if (state.links[task.key]) {
+          window.open(state.links[task.key], "_blank", "noopener");
           return;
         }
-        state.editingId = id;
+        state.editingId = task.key;
         $("#dialogTaskName").textContent = `${task.type}${task.episode ? `｜${episodeLabel(task)}` : ""}`;
         $("#youtubeLink").value = "";
         $("#linkDialog").showModal();
       });
+
+      card.querySelector(".edit-button").addEventListener("click", () => openTaskDialog("edit", task));
+
       card.querySelector(".delete-button")?.addEventListener("click", () => {
         if (!window.confirm(`確定刪除「${task.type}」嗎？`)) return;
         state.customTasks = state.customTasks.filter(item => item.id !== task.id);
-        delete state.completed[id];
-        delete state.links[id];
-        localStorage.setItem("yt-custom-tasks", JSON.stringify(state.customTasks));
-        localStorage.setItem("yt-completed", JSON.stringify(state.completed));
-        localStorage.setItem("yt-links", JSON.stringify(state.links));
+        delete state.completed[task.key];
+        delete state.links[task.key];
+        saveLocalState();
         render();
         toast("自訂任務已刪除");
       });
+
       group.appendChild(card);
     });
     list.appendChild(group);
@@ -134,6 +208,56 @@ function toast(message) {
   toast.timer = setTimeout(() => node.classList.remove("show"), 2600);
 }
 
+function excelDate(value) {
+  if (value instanceof Date && !Number.isNaN(value.valueOf())) return value;
+  if (typeof value === "number") {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (parsed) return new Date(parsed.y, parsed.m - 1, parsed.d, 12);
+  }
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.valueOf())) return parsed;
+  }
+  return null;
+}
+
+function localDateString(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function parseWorkbook(workbook) {
+  const found = [];
+  IMPORT_SHEETS.forEach(config => {
+    const sheetName = workbook.SheetNames.find(name => name.includes(config.match));
+    if (!sheetName) return;
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, raw: true, defval: null });
+    const headers = rows[1] || [];
+    headers.forEach((header, column) => {
+      const headerText = String(header || "").trim();
+      if (!["播放日期", "日期"].includes(headerText)) return;
+      for (let rowIndex = 2; rowIndex < rows.length; rowIndex += 1) {
+        const row = rows[rowIndex] || [];
+        const playDate = excelDate(row[column]);
+        const episode = row[column + 1];
+        const owner = row[column + 2];
+        if (!playDate || episode === null || episode === "") continue;
+        const uploadDate = new Date(playDate);
+        uploadDate.setDate(uploadDate.getDate() - 1);
+        found.push({
+          upload: localDateString(uploadDate),
+          play: localDateString(playDate),
+          type: config.type,
+          episode: typeof episode === "number" && Number.isInteger(episode) ? episode : episode,
+          owner: owner || ""
+        });
+      }
+    });
+  });
+  const unique = new Map();
+  found.forEach(task => unique.set(`${task.play}|${task.type}|${task.episode}|${task.owner}`, task));
+  return [...unique.values()].sort((a, b) => a.upload.localeCompare(b.upload) || a.type.localeCompare(b.type));
+}
+
 document.querySelectorAll(".tab").forEach(button => button.addEventListener("click", () => {
   document.querySelectorAll(".tab").forEach(tab => tab.classList.toggle("active", tab === button));
   state.filter = button.dataset.filter;
@@ -142,7 +266,7 @@ document.querySelectorAll(".tab").forEach(button => button.addEventListener("cli
 
 $("#ownerFilter").addEventListener("change", event => {
   state.owner = event.target.value;
-  localStorage.setItem("yt-owner-filter", state.owner);
+  saveLocalState();
   render();
 });
 
@@ -153,7 +277,7 @@ $("#saveLinkButton").addEventListener("click", event => {
   try {
     new URL(value);
     state.links[state.editingId] = value;
-    localStorage.setItem("yt-links", JSON.stringify(state.links));
+    saveLocalState();
     $("#linkDialog").close();
     render();
     toast("影片連結已儲存");
@@ -162,41 +286,77 @@ $("#saveLinkButton").addEventListener("click", event => {
   }
 });
 
-$("#addTaskButton").addEventListener("click", () => {
-  $("#customUploadDate").value = today();
-  $("#taskDialog").showModal();
+$("#addTaskButton").addEventListener("click", () => openTaskDialog("create"));
+
+$("#importButton").addEventListener("click", () => {
+  if (typeof XLSX === "undefined") return toast("Excel 元件尚未載入，請重新整理");
+  $("#excelFile").value = "";
+  $("#excelFile").click();
+});
+
+$("#excelFile").addEventListener("change", async event => {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+    const tasks = parseWorkbook(workbook);
+    if (!tasks.length) return toast("沒有找到可匯入的排程");
+    const dates = tasks.map(task => task.play).sort();
+    const ok = window.confirm(`找到 ${tasks.length} 項排程（${dates[0]} 至 ${dates[dates.length - 1]}）。\n\n按「確定」後會更新目前排程，原本自訂任務會保留。`);
+    if (!ok) return;
+    state.importedTasks = tasks;
+    state.taskEdits = {};
+    saveLocalState();
+    render();
+    toast(`已匯入 ${tasks.length} 項排程`);
+  } catch (error) {
+    console.error(error);
+    toast("Excel 讀取失敗，請確認檔案格式");
+  }
 });
 
 $("#cancelTaskButton").addEventListener("click", () => $("#taskDialog").close());
 
 $("#taskForm").addEventListener("submit", event => {
   event.preventDefault();
-  const upload = $("#customUploadDate").value;
-  const type = $("#customType").value.trim();
-  if (!upload || !type) return;
-  state.customTasks.push({
-    id: `custom-${Date.now()}`,
-    upload,
-    play: "",
-    type,
+  const payload = {
+    upload: $("#customUploadDate").value,
+    play: $("#customPlayDate").value,
+    type: $("#customType").value.trim(),
     episode: $("#customEpisode").value.trim(),
-    owner: $("#customOwner").value.trim(),
-    custom: true
-  });
-  localStorage.setItem("yt-custom-tasks", JSON.stringify(state.customTasks));
+    owner: $("#customOwner").value.trim()
+  };
+  if (!payload.upload || !payload.type) return;
+
+  if (state.editingMode === "edit" && state.editingId) {
+    const customIndex = state.customTasks.findIndex(task => task.id === state.editingId);
+    if (customIndex >= 0) {
+      state.customTasks[customIndex] = { ...state.customTasks[customIndex], ...payload };
+    } else {
+      state.taskEdits[state.editingId] = payload;
+    }
+    toast("任務已修改");
+  } else {
+    state.customTasks.push({
+      id: `custom-${Date.now()}`,
+      ...payload
+    });
+    state.filter = payload.upload === today() ? "today" : "all";
+    document.querySelectorAll(".tab").forEach(tab => tab.classList.toggle("active", tab.dataset.filter === state.filter));
+    toast("自訂任務已新增");
+  }
+
+  saveLocalState();
   event.target.reset();
   $("#taskDialog").close();
-  state.filter = upload === today() ? "today" : "all";
-  document.querySelectorAll(".tab").forEach(tab => tab.classList.toggle("active", tab.dataset.filter === state.filter));
   render();
-  toast("自訂任務已新增");
 });
 
 $("#notifyButton").addEventListener("click", async () => {
   if (!("Notification" in window)) return toast("這台手機不支援網頁通知，請使用行事曆提醒");
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return toast("通知未開啟，仍可使用行事曆提醒");
-  const count = allTasks().filter(task => task.upload === today() && !state.completed[taskId(task)]).length;
+  const count = allTasks().filter(task => task.upload === today() && !state.completed[task.key]).length;
   const registration = await navigator.serviceWorker?.ready;
   if (registration) {
     registration.showNotification("晚間上傳提醒", {
@@ -240,7 +400,7 @@ $("#calendarButton").addEventListener("click", () => {
   }).join("\r\n");
   const calendar = `BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Kingdom321//Evening Upload Reminder//ZH\r\nCALSCALE:GREGORIAN\r\n${events}\r\nEND:VCALENDAR`;
   const link = document.createElement("a");
-  link.href = URL.createObjectURL(new Blob([calendar], {type: "text/calendar;charset=utf-8"}));
+  link.href = URL.createObjectURL(new Blob([calendar], { type: "text/calendar;charset=utf-8" }));
   link.download = "國度321-晚間上傳提醒.ics";
   link.click();
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);

@@ -39,6 +39,10 @@
         <span class="action-icon">＋</span>
         <span><strong>新增任務</strong><small>建立自己的上傳項目</small></span>
       </button>
+      <button id="importButton" class="action-card">
+        <span class="action-icon">匯</span>
+        <span><strong>匯入 Excel</strong><small>用表單更新目前排程</small></span>
+      </button>
       <button id="notifyButton" class="action-card">
         <span class="action-icon">鈴</span>
         <span><strong>開啟通知</strong><small>查看今晚 8 點提醒</small></span>
@@ -48,6 +52,7 @@
         <span><strong>加入行事曆</strong><small>每晚 8 點提醒</small></span>
       </button>
     </section>
+    <input id="excelFile" type="file" accept=".xlsx,.xls" hidden>
 
     <section class="owner-filter">
       <label class="filter-label" for="ownerFilter">按人名查看服事</label>
@@ -79,10 +84,14 @@
 
   <dialog id="taskDialog">
     <form id="taskForm" class="dialog-card">
-      <h2>新增自訂任務</h2>
+      <h2 id="taskDialogTitle">新增自訂任務</h2>
       <label class="field">
         <span>上傳日期</span>
         <input id="customUploadDate" type="date" required>
+      </label>
+      <label class="field">
+        <span>播放日期</span>
+        <input id="customPlayDate" type="date">
       </label>
       <label class="field">
         <span>影片名稱</span>
@@ -98,12 +107,13 @@
       </label>
       <div class="dialog-actions">
         <button id="cancelTaskButton" type="button" class="secondary">取消</button>
-        <button type="submit" class="primary">新增任務</button>
+        <button id="taskSubmitButton" type="submit" class="primary">新增任務</button>
       </div>
     </form>
   </dialog>
 
   <div id="toast" class="toast" role="status"></div>
+  <script src="xlsx.full.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
-const CACHE = "yt-reminder-v3";
-const ASSETS = ["./", "index.html", "styles.css", "app.js", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
+const CACHE = "yt-reminder-v4";
+const ASSETS = ["./", "index.html", "styles.css", "app.js", "xlsx.full.min.js", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)));
