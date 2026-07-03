@@ -10,6 +10,13 @@ const IMPORT_SHEETS = [
   { match: "舊約導讀", type: "舊約導讀" },
   { match: "新約靈修會主", type: "新約靈修會主" }
 ];
+const COMPACT_TYPE_MAP = [
+  { match: ["主題曲"], type: "321主題曲" },
+  { match: ["講述影片"], type: "321講述影片" },
+  { match: ["真理點心"], type: "真理點心" },
+  { match: ["舊約導讀"], type: "舊約導讀" },
+  { match: ["新约講述", "新約講述"], type: "新約靈修會主" }
+];
 
 const state = {
   filter: "today",
@@ -45,6 +52,10 @@ function baseTaskKey(task) {
 
 function taskKey(task) {
   return task.id || baseTaskKey(task);
+}
+
+function isImportedTask(task) {
+  return !task.id;
 }
 
 function mergeTask(task) {
@@ -161,7 +172,7 @@ function render() {
         <input class="check" type="checkbox" aria-label="標示完成" ${state.completed[task.key] ? "checked" : ""}>
         <div>
           <h3 class="task-title">${task.type}${task.episode ? `｜${episodeLabel(task)}` : ""}${task.id ? '<span class="custom-badge">自訂</span>' : ""}</h3>
-          <p class="meta">${task.owner ? `負責：${task.owner}　·　` : ""}${task.play ? `${displayDate(task.play)}播放` : `${displayDate(task.upload)}上傳`}　·　${PLATFORMS.join("、")}</p>
+          <p class="meta">${task.owner ? `負責：${task.owner}　·　` : ""}${task.play ? `${displayDate(task.play)}播放` : `${displayDate(task.upload)}上傳`}</p>
         </div>
         <div class="task-actions">
           <button class="link-button ${state.links[task.key] ? "saved" : ""}">${state.links[task.key] ? "開啟影片" : "貼連結"}</button>
@@ -234,11 +245,80 @@ function localDateString(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function normalizeImportType(label) {
+  const text = String(label || "").replace(/\s+/g, "");
+  const matched = COMPACT_TYPE_MAP.find(config => config.match.some(keyword => text.includes(keyword)));
+  return matched ? matched.type : "";
+}
+
+function splitCellLines(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
+function parseCompactWorkbook(workbook) {
+  const sheetName = workbook.SheetNames[0];
+  if (!sheetName) return [];
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, raw: true, defval: null });
+  if (rows.length < 3) return [];
+  const owners = rows[0] || [];
+  const headers = rows[1] || [];
+  let matchedColumns = 0;
+  const found = [];
+
+  for (let column = 0; column < headers.length; column += 1) {
+    const headerText = String(headers[column] || "").trim();
+    if (headerText !== "日期") continue;
+    const owner = String(owners[column] || "").trim();
+    if (!owner) continue;
+    const videoHeader = String(headers[column + 1] || "").trim();
+    const episodeHeader = String(headers[column + 2] || "").trim();
+    if (videoHeader !== "影片" || episodeHeader !== "集數") continue;
+    matchedColumns += 1;
+
+    for (let rowIndex = 2; rowIndex < rows.length; rowIndex += 1) {
+      const row = rows[rowIndex] || [];
+      const playDate = excelDate(row[column]);
+      if (!playDate) continue;
+      const videoItems = splitCellLines(row[column + 1]);
+      const episodeItems = splitCellLines(row[column + 2]);
+      if (!videoItems.length) continue;
+
+      videoItems.forEach((videoLabel, index) => {
+        const type = normalizeImportType(videoLabel);
+        if (!type) return;
+        const episode = episodeItems[index] || episodeItems[0] || "";
+        if (!episode) return;
+        const uploadDate = new Date(playDate);
+        uploadDate.setDate(uploadDate.getDate() - 1);
+        const episodeValue = /^\d+$/.test(String(episode).trim()) ? Number(String(episode).trim()) : String(episode).trim();
+        found.push({
+          upload: localDateString(uploadDate),
+          play: localDateString(playDate),
+          type,
+          episode: episodeValue,
+          owner
+        });
+      });
+    }
+  }
+
+  if (matchedColumns === 0) {
+    throw new Error("NO_MATCHING_SHEETS");
+  }
+
+  return found;
+}
+
 function parseWorkbook(workbook) {
   const found = [];
+  let matchedSheets = 0;
   IMPORT_SHEETS.forEach(config => {
     const sheetName = workbook.SheetNames.find(name => name.includes(config.match));
     if (!sheetName) return;
+    matchedSheets += 1;
     const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, raw: true, defval: null });
     const headers = rows[1] || [];
     headers.forEach((header, column) => {
@@ -262,9 +342,37 @@ function parseWorkbook(workbook) {
       }
     });
   });
+  if (matchedSheets === 0) {
+    return parseCompactWorkbook(workbook);
+  }
   const unique = new Map();
   found.forEach(task => unique.set(`${task.play}|${task.type}|${task.episode}|${task.owner}`, task));
   return [...unique.values()].sort((a, b) => a.upload.localeCompare(b.upload) || a.type.localeCompare(b.type));
+}
+
+function readFileAsArrayBuffer(file) {
+  if (typeof file.arrayBuffer === "function") {
+    return file.arrayBuffer();
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error("FILE_READ_FAILED"));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function clearImportedSchedule() {
+  const importedKeys = scheduleSource().map(task => baseTaskKey(task));
+  importedKeys.forEach(key => {
+    delete state.taskEdits[key];
+    delete state.deletedTasks[key];
+    delete state.completed[key];
+    delete state.links[key];
+  });
+  state.importedTasks = null;
+  saveLocalState();
+  render();
 }
 
 document.querySelectorAll(".tab").forEach(button => button.addEventListener("click", () => {
@@ -303,16 +411,26 @@ $("#importButton").addEventListener("click", () => {
   $("#excelFile").click();
 });
 
+$("#clearImportButton").addEventListener("click", () => {
+  const hasImportedSchedule = Array.isArray(state.importedTasks) && state.importedTasks.length > 0;
+  if (!hasImportedSchedule) return toast("目前沒有匯入中的 Excel 排程");
+  const ok = window.confirm("確定要刪除整份匯入的 Excel 排程嗎？\n\n自訂任務會保留，但這批匯入的任務、修改記錄和刪除記錄都會清空。");
+  if (!ok) return;
+  clearImportedSchedule();
+  toast("已刪除整份匯入排程");
+});
+
 $("#excelFile").addEventListener("change", async event => {
   const file = event.target.files[0];
   if (!file) return;
   try {
-    const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+    const workbook = XLSX.read(await readFileAsArrayBuffer(file), { type: "array", cellDates: true });
     const tasks = parseWorkbook(workbook);
     if (!tasks.length) return toast("沒有找到可匯入的排程");
     const dates = tasks.map(task => task.play).sort();
     const ok = window.confirm(`找到 ${tasks.length} 項排程（${dates[0]} 至 ${dates[dates.length - 1]}）。\n\n按「確定」後會更新目前排程，原本自訂任務會保留。`);
     if (!ok) return;
+    clearImportedSchedule();
     state.importedTasks = tasks;
     state.taskEdits = {};
     state.deletedTasks = {};
@@ -321,7 +439,11 @@ $("#excelFile").addEventListener("change", async event => {
     toast(`已匯入 ${tasks.length} 項排程`);
   } catch (error) {
     console.error(error);
-    toast("Excel 讀取失敗，請確認檔案格式");
+    if (error?.message === "NO_MATCHING_SHEETS") {
+      toast("Excel 裡沒有找到對應的服事工作表");
+      return;
+    }
+    toast("Excel 匯入失敗，請改用 .xlsx 檔或重新選一次");
   }
 });
 
