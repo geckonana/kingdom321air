@@ -19,6 +19,7 @@ const state = {
   customTasks: JSON.parse(localStorage.getItem("yt-custom-tasks") || "[]"),
   importedTasks: JSON.parse(localStorage.getItem("yt-imported-tasks") || "null"),
   taskEdits: JSON.parse(localStorage.getItem("yt-task-edits") || "{}"),
+  deletedTasks: JSON.parse(localStorage.getItem("yt-deleted-tasks") || "{}"),
   editingId: null,
   editingMode: "create"
 };
@@ -55,7 +56,9 @@ function mergeTask(task) {
 function allTasks() {
   const baseTasks = scheduleSource().map(mergeTask);
   const customTasks = state.customTasks.map(task => ({ ...task, key: task.id }));
-  return [...baseTasks, ...customTasks].sort((a, b) => a.upload.localeCompare(b.upload) || a.type.localeCompare(b.type));
+  return [...baseTasks, ...customTasks]
+    .filter(task => !state.deletedTasks[task.key])
+    .sort((a, b) => a.upload.localeCompare(b.upload) || a.type.localeCompare(b.type));
 }
 
 function matchesOwner(task) {
@@ -77,6 +80,7 @@ function filteredTasks() {
 function saveLocalState() {
   localStorage.setItem("yt-custom-tasks", JSON.stringify(state.customTasks));
   localStorage.setItem("yt-task-edits", JSON.stringify(state.taskEdits));
+  localStorage.setItem("yt-deleted-tasks", JSON.stringify(state.deletedTasks));
   localStorage.setItem("yt-completed", JSON.stringify(state.completed));
   localStorage.setItem("yt-links", JSON.stringify(state.links));
   localStorage.setItem("yt-owner-filter", state.owner);
@@ -162,7 +166,7 @@ function render() {
         <div class="task-actions">
           <button class="link-button ${state.links[task.key] ? "saved" : ""}">${state.links[task.key] ? "開啟影片" : "貼連結"}</button>
           <button class="edit-button">修改</button>
-          ${task.id ? '<button class="delete-button">刪除</button>' : ""}
+          <button class="delete-button">刪除</button>
         </div>`;
 
       card.querySelector(".check").addEventListener("change", event => {
@@ -184,14 +188,19 @@ function render() {
 
       card.querySelector(".edit-button").addEventListener("click", () => openTaskDialog("edit", task));
 
-      card.querySelector(".delete-button")?.addEventListener("click", () => {
+      card.querySelector(".delete-button").addEventListener("click", () => {
         if (!window.confirm(`確定刪除「${task.type}」嗎？`)) return;
-        state.customTasks = state.customTasks.filter(item => item.id !== task.id);
+        if (task.id) {
+          state.customTasks = state.customTasks.filter(item => item.id !== task.id);
+        } else {
+          state.deletedTasks[task.key] = true;
+          delete state.taskEdits[task.key];
+        }
         delete state.completed[task.key];
         delete state.links[task.key];
         saveLocalState();
         render();
-        toast("自訂任務已刪除");
+        toast("任務已刪除");
       });
 
       group.appendChild(card);
@@ -306,6 +315,7 @@ $("#excelFile").addEventListener("change", async event => {
     if (!ok) return;
     state.importedTasks = tasks;
     state.taskEdits = {};
+    state.deletedTasks = {};
     saveLocalState();
     render();
     toast(`已匯入 ${tasks.length} 項排程`);
@@ -334,13 +344,16 @@ $("#taskForm").addEventListener("submit", event => {
       state.customTasks[customIndex] = { ...state.customTasks[customIndex], ...payload };
     } else {
       state.taskEdits[state.editingId] = payload;
+      delete state.deletedTasks[state.editingId];
     }
     toast("任務已修改");
   } else {
+    const id = `custom-${Date.now()}`;
     state.customTasks.push({
-      id: `custom-${Date.now()}`,
+      id,
       ...payload
     });
+    delete state.deletedTasks[id];
     state.filter = payload.upload === today() ? "today" : "all";
     document.querySelectorAll(".tab").forEach(tab => tab.classList.toggle("active", tab.dataset.filter === state.filter));
     toast("自訂任務已新增");
