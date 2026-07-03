@@ -1,6 +1,6 @@
 {
-  "name": "國度321 晚間上傳提醒",
-  "short_name": "晚間提醒",
+  "name": "國度321 短視頻服事小幫手",
+  "short_name": "服事小幫手",
   "description": "依播放日期前一天，在每晚 8 點提醒上傳多個平台",
   "start_url": "./",
   "display": "standalone",
