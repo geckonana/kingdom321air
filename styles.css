@@ -77,10 +77,13 @@ main { width: min(100%, 720px); margin: 0 auto; padding: 18px 16px; }
   display: grid;
   place-content: center;
   text-align: center;
+  border: 0;
   border-radius: 50%;
+  color: white;
   background: conic-gradient(var(--gold) var(--progress, 0%), rgba(255,255,255,.22) 0);
   box-shadow: inset 0 0 0 8px rgba(255,255,255,.14);
 }
+.progress-ring:active { transform: scale(.98); }
 .progress-ring strong { font-size: 17px; }
 .progress-ring span { font-size: 11px; opacity: .85; }
 

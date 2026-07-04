@@ -575,6 +575,7 @@ $("#calendarButton").addEventListener("click", () => {
   toast("行事曆檔已建立，請選擇加入行事曆");
 });
 
+$("#progressRing").addEventListener("click", () => openUploadLogDialog());
 $("#uploadLogButton").addEventListener("click", () => openUploadLogDialog());
 $("#uploadLogCloseButton").addEventListener("click", () => $("#uploadLogDialog").close());
 

@@ -1,4 +1,4 @@
-const CACHE = "yt-reminder-v13";
+const CACHE = "yt-reminder-v14";
 const ASSETS = ["./", "index.html", "styles.css", "app.js", "xlsx.full.min.js", "manifest.webmanifest", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", event => {
