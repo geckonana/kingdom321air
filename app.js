@@ -28,7 +28,8 @@ const state = {
   taskEdits: JSON.parse(localStorage.getItem("yt-task-edits") || "{}"),
   deletedTasks: JSON.parse(localStorage.getItem("yt-deleted-tasks") || "{}"),
   editingId: null,
-  editingMode: "create"
+  editingMode: "create",
+  actionTaskKey: null
 };
 
 const $ = selector => document.querySelector(selector);
@@ -137,6 +138,27 @@ function openTaskDialog(mode, task = null) {
   $("#taskDialog").showModal();
 }
 
+function deleteTask(task) {
+  if (!window.confirm(`確定刪除「${task.type}」嗎？`)) return;
+  if (task.id) {
+    state.customTasks = state.customTasks.filter(item => item.id !== task.id);
+  } else {
+    state.deletedTasks[task.key] = true;
+    delete state.taskEdits[task.key];
+  }
+  delete state.completed[task.key];
+  delete state.links[task.key];
+  saveLocalState();
+  render();
+  toast("任務已刪除");
+}
+
+function openTaskActionDialog(task) {
+  state.actionTaskKey = task.key;
+  $("#taskActionTitle").textContent = `${task.type}${task.episode ? `｜${episodeLabel(task)}` : ""}`;
+  $("#taskActionDialog").showModal();
+}
+
 function render() {
   renderOwnerFilter();
   const current = today();
@@ -175,9 +197,7 @@ function render() {
           <p class="meta">${task.owner ? `負責：${task.owner}　·　` : ""}${task.play ? `${displayDate(task.play)}播放` : `${displayDate(task.upload)}上傳`}</p>
         </div>
         <div class="task-actions">
-          <button class="link-button ${state.links[task.key] ? "saved" : ""}">${state.links[task.key] ? "開啟影片" : "貼連結"}</button>
-          <button class="edit-button">修改</button>
-          <button class="delete-button">刪除</button>
+          <button class="manage-button" type="button">管理</button>
         </div>`;
 
       card.querySelector(".check").addEventListener("change", event => {
@@ -186,33 +206,7 @@ function render() {
         render();
       });
 
-      card.querySelector(".link-button").addEventListener("click", () => {
-        if (state.links[task.key]) {
-          window.open(state.links[task.key], "_blank", "noopener");
-          return;
-        }
-        state.editingId = task.key;
-        $("#dialogTaskName").textContent = `${task.type}${task.episode ? `｜${episodeLabel(task)}` : ""}`;
-        $("#youtubeLink").value = "";
-        $("#linkDialog").showModal();
-      });
-
-      card.querySelector(".edit-button").addEventListener("click", () => openTaskDialog("edit", task));
-
-      card.querySelector(".delete-button").addEventListener("click", () => {
-        if (!window.confirm(`確定刪除「${task.type}」嗎？`)) return;
-        if (task.id) {
-          state.customTasks = state.customTasks.filter(item => item.id !== task.id);
-        } else {
-          state.deletedTasks[task.key] = true;
-          delete state.taskEdits[task.key];
-        }
-        delete state.completed[task.key];
-        delete state.links[task.key];
-        saveLocalState();
-        render();
-        toast("任務已刪除");
-      });
+      card.querySelector(".manage-button").addEventListener("click", () => openTaskActionDialog(task));
 
       group.appendChild(card);
     });
@@ -387,22 +381,6 @@ $("#ownerFilter").addEventListener("change", event => {
   render();
 });
 
-$("#saveLinkButton").addEventListener("click", event => {
-  const value = $("#youtubeLink").value.trim();
-  if (!value) return;
-  event.preventDefault();
-  try {
-    new URL(value);
-    state.links[state.editingId] = value;
-    saveLocalState();
-    $("#linkDialog").close();
-    render();
-    toast("影片連結已儲存");
-  } catch {
-    toast("請輸入正確的網址");
-  }
-});
-
 $("#addTaskButton").addEventListener("click", () => openTaskDialog("create"));
 
 $("#importButton").addEventListener("click", () => {
@@ -448,6 +426,25 @@ $("#excelFile").addEventListener("change", async event => {
 });
 
 $("#cancelTaskButton").addEventListener("click", () => $("#taskDialog").close());
+
+$("#sheetCancelButton").addEventListener("click", () => {
+  state.actionTaskKey = null;
+  $("#taskActionDialog").close();
+});
+
+$("#sheetEditButton").addEventListener("click", () => {
+  const task = allTasks().find(item => item.key === state.actionTaskKey);
+  $("#taskActionDialog").close();
+  state.actionTaskKey = null;
+  if (task) openTaskDialog("edit", task);
+});
+
+$("#sheetDeleteButton").addEventListener("click", () => {
+  const task = allTasks().find(item => item.key === state.actionTaskKey);
+  $("#taskActionDialog").close();
+  state.actionTaskKey = null;
+  if (task) deleteTask(task);
+});
 
 $("#taskForm").addEventListener("submit", event => {
   event.preventDefault();

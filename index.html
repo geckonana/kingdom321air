@@ -77,18 +77,6 @@
     <section id="taskList" class="task-list" aria-live="polite"></section>
   </main>
 
-  <dialog id="linkDialog">
-    <form method="dialog" class="dialog-card">
-      <h2>貼上影片連結</h2>
-      <p id="dialogTaskName"></p>
-      <input id="youtubeLink" type="url" inputmode="url" placeholder="https://youtu.be/..." autocomplete="off">
-      <div class="dialog-actions">
-        <button value="cancel" class="secondary">取消</button>
-        <button id="saveLinkButton" value="default" class="primary">儲存</button>
-      </div>
-    </form>
-  </dialog>
-
   <dialog id="taskDialog">
     <form id="taskForm" class="dialog-card">
       <h2 id="taskDialogTitle">新增自訂任務</h2>
@@ -117,6 +105,17 @@
         <button id="taskSubmitButton" type="submit" class="primary">新增任務</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="taskActionDialog">
+    <div class="dialog-card action-sheet">
+      <h2 id="taskActionTitle">管理任務</h2>
+      <div class="sheet-actions">
+        <button id="sheetEditButton" type="button" class="secondary">修改</button>
+        <button id="sheetDeleteButton" type="button" class="danger-button">刪除</button>
+        <button id="sheetCancelButton" type="button" class="ghost-button">取消</button>
+      </div>
+    </div>
   </dialog>
 
   <div id="toast" class="toast" role="status"></div>
