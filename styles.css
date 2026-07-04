@@ -263,6 +263,29 @@ dialog::backdrop { background: rgba(16,42,67,.55); backdrop-filter: blur(4px); }
   padding: 12px 14px;
   font-size: 15px;
 }
+.upload-log-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.upload-log-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f8fbff;
+}
+.upload-log-item input {
+  width: 24px;
+  height: 24px;
+  accent-color: #2a9d8f;
+}
+.upload-log-item span {
+  font-size: 16px;
+  font-weight: 700;
+}
 .toast {
   position: fixed;
   z-index: 10;

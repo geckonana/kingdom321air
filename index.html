@@ -58,6 +58,10 @@
         <span class="action-icon">曆</span>
         <span><strong>加入行事曆</strong><small>每晚 8 點提醒</small></span>
       </button>
+      <button id="uploadLogButton" class="action-card">
+        <span class="action-icon">記</span>
+        <span><strong>上傳登記</strong><small id="uploadLogSummary">勾選今天已上傳的平台</small></span>
+      </button>
     </section>
     <input id="excelFile" type="file" accept=".xlsx,.xls" hidden>
 
@@ -114,6 +118,17 @@
         <button id="sheetEditButton" type="button" class="secondary">修改</button>
         <button id="sheetDeleteButton" type="button" class="danger-button">刪除</button>
         <button id="sheetCancelButton" type="button" class="ghost-button">取消</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="uploadLogDialog">
+    <div class="dialog-card action-sheet">
+      <h2>上傳登記</h2>
+      <p id="uploadLogDate"></p>
+      <div id="uploadLogList" class="upload-log-list"></div>
+      <div class="dialog-actions">
+        <button id="uploadLogCloseButton" type="button" class="primary">完成</button>
       </div>
     </div>
   </dialog>

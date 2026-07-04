@@ -23,6 +23,7 @@ const state = {
   owner: localStorage.getItem("yt-owner-filter") || "all",
   completed: JSON.parse(localStorage.getItem("yt-completed") || "{}"),
   links: JSON.parse(localStorage.getItem("yt-links") || "{}"),
+  uploadChecks: JSON.parse(localStorage.getItem("yt-upload-checks") || "{}"),
   customTasks: JSON.parse(localStorage.getItem("yt-custom-tasks") || "[]"),
   importedTasks: JSON.parse(localStorage.getItem("yt-imported-tasks") || "null"),
   taskEdits: JSON.parse(localStorage.getItem("yt-task-edits") || "{}"),
@@ -89,12 +90,17 @@ function filteredTasks() {
   return tasks;
 }
 
+function todayUploadChecks() {
+  return state.uploadChecks[today()] || {};
+}
+
 function saveLocalState() {
   localStorage.setItem("yt-custom-tasks", JSON.stringify(state.customTasks));
   localStorage.setItem("yt-task-edits", JSON.stringify(state.taskEdits));
   localStorage.setItem("yt-deleted-tasks", JSON.stringify(state.deletedTasks));
   localStorage.setItem("yt-completed", JSON.stringify(state.completed));
   localStorage.setItem("yt-links", JSON.stringify(state.links));
+  localStorage.setItem("yt-upload-checks", JSON.stringify(state.uploadChecks));
   localStorage.setItem("yt-owner-filter", state.owner);
   if (state.importedTasks) {
     localStorage.setItem("yt-imported-tasks", JSON.stringify(state.importedTasks));
@@ -159,8 +165,38 @@ function openTaskActionDialog(task) {
   $("#taskActionDialog").showModal();
 }
 
+function renderUploadLogSummary() {
+  const checks = todayUploadChecks();
+  const done = PLATFORMS.filter(name => checks[name]).length;
+  $("#uploadLogSummary").textContent = done ? `今天已勾選 ${done}/${PLATFORMS.length}` : "勾選今天已上傳的平台";
+}
+
+function openUploadLogDialog() {
+  const current = today();
+  const checks = todayUploadChecks();
+  $("#uploadLogDate").textContent = `${displayDate(current)} 上傳平台`;
+  $("#uploadLogList").innerHTML = "";
+  PLATFORMS.forEach(platform => {
+    const label = document.createElement("label");
+    label.className = "upload-log-item";
+    label.innerHTML = `
+      <input type="checkbox" ${checks[platform] ? "checked" : ""}>
+      <span>${platform}</span>
+    `;
+    label.querySelector("input").addEventListener("change", event => {
+      state.uploadChecks[current] ||= {};
+      state.uploadChecks[current][platform] = event.target.checked;
+      saveLocalState();
+      renderUploadLogSummary();
+    });
+    $("#uploadLogList").appendChild(label);
+  });
+  $("#uploadLogDialog").showModal();
+}
+
 function render() {
   renderOwnerFilter();
+  renderUploadLogSummary();
   const current = today();
   const todaysTasks = ownerTasks().filter(task => task.upload === current);
   const done = todaysTasks.filter(task => state.completed[task.key]).length;
@@ -538,6 +574,9 @@ $("#calendarButton").addEventListener("click", () => {
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   toast("行事曆檔已建立，請選擇加入行事曆");
 });
+
+$("#uploadLogButton").addEventListener("click", () => openUploadLogDialog());
+$("#uploadLogCloseButton").addEventListener("click", () => $("#uploadLogDialog").close());
 
 let deferredPrompt;
 window.addEventListener("beforeinstallprompt", event => {
