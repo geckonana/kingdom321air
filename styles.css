@@ -84,7 +84,7 @@ main { width: min(100%, 720px); margin: 0 auto; padding: 18px 16px; }
 .progress-ring strong { font-size: 17px; }
 .progress-ring span { font-size: 11px; opacity: .85; }
 
-.quick-actions { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; margin: 14px 0 18px; }
+.quick-actions { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; margin: 18px 0 18px; }
 .action-card {
   display: flex;
   align-items: center;

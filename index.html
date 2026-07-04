@@ -37,6 +37,21 @@
       </div>
     </section>
 
+    <section class="owner-filter">
+      <label class="filter-label" for="ownerFilter">按人名查看服事</label>
+      <select id="ownerFilter" class="filter-select" aria-label="按人名查看服事">
+        <option value="all">全部同工</option>
+      </select>
+    </section>
+
+    <nav class="tabs" aria-label="清單篩選">
+      <button class="tab active" data-filter="today">今天</button>
+      <button class="tab" data-filter="upcoming">接下來</button>
+      <button class="tab" data-filter="all">全部</button>
+    </nav>
+
+    <section id="taskList" class="task-list" aria-live="polite"></section>
+
     <section class="quick-actions" aria-label="快捷功能">
       <button id="addTaskButton" class="action-card">
         <span class="action-icon">＋</span>
@@ -64,21 +79,6 @@
       </button>
     </section>
     <input id="excelFile" type="file" accept=".xlsx,.xls" hidden>
-
-    <section class="owner-filter">
-      <label class="filter-label" for="ownerFilter">按人名查看服事</label>
-      <select id="ownerFilter" class="filter-select" aria-label="按人名查看服事">
-        <option value="all">全部同工</option>
-      </select>
-    </section>
-
-    <nav class="tabs" aria-label="清單篩選">
-      <button class="tab active" data-filter="today">今天</button>
-      <button class="tab" data-filter="upcoming">接下來</button>
-      <button class="tab" data-filter="all">全部</button>
-    </nav>
-
-    <section id="taskList" class="task-list" aria-live="polite"></section>
   </main>
 
   <dialog id="taskDialog">
